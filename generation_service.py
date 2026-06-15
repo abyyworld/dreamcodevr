@@ -35,7 +35,20 @@ def generate_behavior(scene_description, instruction):
         "MonoBehaviour script that implements the instruction, the name "
         "of the target GameObject it should be attached to, and a list "
         "of any assumptions you made (ambiguous references, assumed "
-        "components, default values, etc)."
+        "components, default values, etc).\n\n"
+        "IMPORTANT CODE REQUIREMENTS:\n"
+        "- Always include ALL necessary using statements at the top of "
+        "the script, including 'using UnityEngine;' and "
+        "'using System.Collections;' if you use IEnumerator or "
+        "coroutines (StartCoroutine, yield return, WaitForSeconds, etc).\n"
+        "- The class must inherit from MonoBehaviour.\n"
+        "- The generated code must be complete and compilable on its own - "
+        "do not omit imports, even if they seem obvious.\n"
+        "- If you reference an object by name explicitly given in the "
+        "instruction (e.g. 'Sphere_01'), use GameObject.Find(\"Sphere_01\") "
+        "or similar to locate it at runtime, do not assume 'this' refers "
+        "to the GameObject the script is attached to unless that is the "
+        "target_object itself."
     )
 
     user_prompt = (
