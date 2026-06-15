@@ -1,6 +1,6 @@
 # DreamCodeVR - Generation Server
 
-Python backend for the DreamCodeVR error-recovery prototype (CHI 2027).
+Python backend for the DreamCodeVR error-recovery prototype.
 Generates Unity C# behavior scripts from natural-language instructions
 using OpenAI (gpt-4o), with structured JSON output.
 
