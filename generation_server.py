@@ -1,35 +1,76 @@
-"""
-Local HTTP bridge for Unity. Wraps generate_behavior() from
-generation_service.py behind a simple POST endpoint.
+import json
+from openai import OpenAI, OpenAIError
 
-Requires: pip install flask
-Requires: GEMINI_API_KEY set (same as before)
-
-Run with: python generation_server.py
-Listens on http://127.0.0.1:5005/generate
-"""
-
-from flask import Flask, request, jsonify
-from generation_service import generate_behavior, GenerationError
-
-app = Flask(__name__)
+client = OpenAI()  # reads OPENAI_API_KEY from env
 
 
-@app.route("/generate", methods=["POST"])
-def generate():
-    data = request.get_json(force=True)
-    scene = data.get("scene", [])
-    instruction = data.get("instruction", "")
+class GenerationError(Exception):
+    """Raised when the AI generation step fails for any reason."""
+    pass
 
-    if not instruction:
-        return jsonify({"error": "missing 'instruction'"}), 400
+
+BEHAVIOR_SCHEMA = {
+    "name": "behavior_output",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "code": {"type": "string"},
+            "target_object": {"type": "string"},
+            "assumptions": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["code", "target_object", "assumptions"],
+        "additionalProperties": False
+    }
+}
+
+
+def generate_behavior(scene_description, instruction):
+    system_prompt = (
+        "You are a Unity C# code generator for a VR scene. "
+        "Given a scene description and an instruction, generate a C# "
+        "MonoBehaviour script that implements the instruction, the name "
+        "of the target GameObject it should be attached to, and a list "
+        "of any assumptions you made (ambiguous references, assumed "
+        "components, default values, etc).\n\n"
+        "IMPORTANT CODE REQUIREMENTS:\n"
+        "- Always include ALL necessary using statements at the top of "
+        "the script, including 'using UnityEngine;' and "
+        "'using System.Collections;' if you use IEnumerator or "
+        "coroutines (StartCoroutine, yield return, WaitForSeconds, etc).\n"
+        "- The class must inherit from MonoBehaviour.\n"
+        "- The generated code must be complete and compilable on its own - "
+        "do not omit imports, even if they seem obvious.\n"
+        "- If you reference an object by name explicitly given in the "
+        "instruction (e.g. 'Sphere_01'), use GameObject.Find(\"Sphere_01\") "
+        "or similar to locate it at runtime, do not assume 'this' refers "
+        "to the GameObject the script is attached to unless that is the "
+        "target_object itself."
+    )
+
+    user_prompt = (
+        f"Scene description:\n{scene_description}\n\n"
+        f"Instruction: {instruction}"
+    )
 
     try:
-        result = generate_behavior(scene, instruction)
-        return jsonify(result)
-    except GenerationError as e:
-        return jsonify({"error": str(e)}), 500
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_schema", "json_schema": BEHAVIOR_SCHEMA}
+        )
+    except OpenAIError as e:
+        raise GenerationError(f"OpenAI API error: {e}")
 
+    try:
+        result = json.loads(response.choices[0].message.content)
+    except (json.JSONDecodeError, IndexError, AttributeError) as e:
+        raise GenerationError(f"Failed to parse model response: {e}")
 
-if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5005)
+    return result
