@@ -1,0 +1,180 @@
+[
+  {
+    "id": "physics_01",
+    "category": "physics",
+    "instruction": "Make this ball bounce when it hits the floor",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class BallBouncer : MonoBehaviour\n{\n    [Tooltip(\"Coefficient of restitution (0 = no bounce, 1 = perfect bounce).\")]\n    public float bounciness = 0.8f;\n    [Tooltip(\"Minimum Y-component of collision normal to be considered \\\"floor\\\".\")]\n    public float floorNormalThreshold = 0.7f;\n    [Tooltip(\"Minimum downward impact velocity along the normal to trigger a bounce.\")]\n    public float minImpactVelocityForBounce = 0.1f;\n\n    private Rigidbody rb;\n\n    void Start()\n    {\n        rb = GetComponent<Rigidbody>();\n        if (rb == null)\n        {\n            Debug.LogError(\"BallBouncer requires a Rigidbody component on the GameObject. Disabling script.\");\n            enabled = false;\n        }\n    }\n\n    void OnCollisionEnter(Collision collision)\n    {\n        if (rb == null || !enabled) return;\n\n        // Get the average normal of the collision contacts.\n        Vector3 collisionNormal = Vector3.zero;\n        if (collision.contacts.Length > 0)\n        {\n            foreach (ContactPoint contact in collision.contacts)\n            {\n                collisionNormal += contact.normal;\n            }\n            collisionNormal.Normalize();\n        }\n        else\n        {\n            // If no contacts, can't determine normal, so exit.\n            return;\n        }\n\n        // Check if the collision surface is predominantly a \"floor\" (normal points upwards)\n        // and if the ball is moving downwards with sufficient velocity.\n        if (collisionNormal.y > floorNormalThreshold)\n        {\n            // Calculate the velocity component of the ball along the collision normal.\n            // This represents the speed at which the ball is approaching (or receding from) the surface.\n            float relativeVelocityAlongNormal = Vector3.Dot(rb.velocity, collisionNormal);\n\n            // Only apply bounce if the ball is moving towards the surface (negative relativeVelocityAlongNormal)\n            // and the impact is significant enough.\n            if (relativeVelocityAlongNormal < -minImpactVelocityForBounce)\n            {\n                // Calculate the desired change in velocity along the normal.\n                // The new velocity along the normal should be the negative of the old, scaled by bounciness.\n                // \u0394v = (v_final - v_initial) = (-v_initial * bounciness) - v_initial\n                float desiredChangeInVelocityAlongNormal = (-relativeVelocityAlongNormal * bounciness) - relativeVelocityAlongNormal;\n\n                // Apply the impulse in the direction of the collision normal.\n                // This makes the ball bounce off the surface at the appropriate angle.\n                rb.AddForce(collisionNormal * desiredChangeInVelocityAlongNormal, ForceMode.Impulse);\n            }\n        }\n    }\n}",
+    "target_object": "Sphere_01",
+    "assumptions": [
+      "\"this ball\" refers to the GameObject named \"Sphere_01\".",
+      "\"the floor\" refers to any GameObject that \"Sphere_01\" collides with, provided the collision normal points predominantly upwards (Y-component greater than 'floorNormalThreshold').",
+      "The desired \"bounce\" behavior is simulated by applying an impulse to \"Sphere_01\"'s Rigidbody upon collision with the \"floor\". The impulse is calculated based on the ball's incoming velocity along the collision normal and a 'bounciness' coefficient, effectively reversing and scaling the component of velocity perpendicular to the surface.",
+      "The GameObject \"Sphere_01\" has a Rigidbody component attached to it, as indicated in the scene description.",
+      "The default values for 'bounciness' (0.8f), 'floorNormalThreshold' (0.7f), and 'minImpactVelocityForBounce' (0.1f) are suitable starting points and can be adjusted via the Inspector."
+    ]
+  },
+  {
+    "id": "physics_02",
+    "category": "physics",
+    "instruction": "Make this object fall slowly, like it's underwater",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class SlowFallUnderwater : MonoBehaviour\n{\n    [Tooltip(\"The drag coefficient applied when underwater.\")]\n    public float underwaterDrag = 5f;\n    [Tooltip(\"The angular drag coefficient applied when underwater.\")]\n    public float underwaterAngularDrag = 5f;\n    [Tooltip(\"The upward force applied to simulate buoyancy.\")]\n    public float buoyancyForceMagnitude = 1f;\n\n    private Rigidbody rb;\n\n    void Start()\n    {\n        rb = GetComponent<Rigidbody>();\n        if (rb == null)\n        {\n            Debug.LogWarning(\"Rigidbody not found on \" + gameObject.name + \". SlowFallUnderwater script requires a Rigidbody to function.\");\n            enabled = false; // Disable the script if no Rigidbody\n            return;\n        }\n\n        // Apply initial drag settings for underwater effect\n        rb.drag = underwaterDrag;\n        rb.angularDrag = underwaterAngularDrag;\n    }\n\n    void FixedUpdate()\n    {\n        // Apply a constant upward force to simulate buoyancy\n        if (rb != null)\n        {\n            rb.AddForce(Vector3.up * buoyancyForceMagnitude, ForceMode.Acceleration);\n        }\n    }\n}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The user wants the 'falling slowly' effect applied to 'Cube_01' since it's a generic grabbable physics object and no specific object was mentioned.",
+      "The 'underwater' effect is achieved by increasing the Rigidbody's drag and angular drag to simulate fluid resistance.",
+      "A constant upward force is added to simulate buoyancy, further contributing to the 'falling slowly' effect by partially counteracting gravity.",
+      "The chosen default values for 'underwaterDrag' (5f), 'underwaterAngularDrag' (5f), and 'buoyancyForceMagnitude' (1f) provide a reasonable starting point for an 'underwater' feel in Unity's default physics environment."
+    ]
+  },
+  {
+    "id": "interaction_01",
+    "category": "interaction",
+    "instruction": "Make this cube turn red when the player grabs it",
+    "status": "ok",
+    "code": "using UnityEngine;using UnityEngine.XR.Interaction.Toolkit;public class GrabColorChanger : MonoBehaviour{private MeshRenderer meshRenderer;private Color originalColor;private XRGrabInteractable grabInteractable;void Awake(){meshRenderer = GetComponent<MeshRenderer>();if (meshRenderer != null){originalColor = meshRenderer.material.color;}grabInteractable = GetComponent<XRGrabInteractable>();}void OnEnable(){if (grabInteractable != null){grabInteractable.selectEntered.AddListener(OnGrabbed);grabInteractable.selectExited.AddListener(OnReleased);}}void OnDisable(){if (grabInteractable != null){grabInteractable.selectEntered.RemoveListener(OnGrabbed);grabInteractable.selectExited.RemoveListener(OnReleased);}}private void OnGrabbed(SelectEnterEventArgs args){if (meshRenderer != null){meshRenderer.material.color = Color.red;}}private void OnReleased(SelectExitEventArgs args){if (meshRenderer != null){meshRenderer.material.color = originalColor;}}}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The 'Cube_01' GameObject will have an 'XRGrabInteractable' component attached to it, which is part of the Unity XR Interaction Toolkit, to detect grabbing and releasing events.",
+      "The 'GrabColorChanger' script will be attached to the 'Cube_01' GameObject.",
+      "The 'Cube_01' GameObject's color should revert to its original color when the player releases it, providing a complete interaction cycle."
+    ]
+  },
+  {
+    "id": "interaction_02",
+    "category": "interaction",
+    "instruction": "Make this lever rotate 90 degrees when pulled",
+    "status": "ok",
+    "code": "using UnityEngine;public class LeverRotationController : MonoBehaviour{ public float rotationRange = 90f; void Start() { HingeJoint hingeJoint = GetComponent<HingeJoint>(); if (hingeJoint != null) { JointLimits limits = hingeJoint.limits; limits.min = 0f; limits.max = rotationRange; hingeJoint.limits = limits; hingeJoint.useLimits = true; } else { Debug.LogError(\"HingeJoint not found on \" + gameObject.name); } }}",
+    "target_object": "Lever_01",
+    "assumptions": [
+      "The 'Lever_01' is intended to be the target object for this script.",
+      "The 'HingeJoint' component on 'Lever_01' is already configured with the correct anchor and axis for rotation, and only its limits need to be set.",
+      "The 'pulled' action implies that the rotation of the lever should be constrained within a 90-degree range by setting the 'HingeJoint' limits.",
+      "The 90-degree rotation range is set from a minimum of 0 degrees to a maximum of 90 degrees relative to the HingeJoint's initial orientation."
+    ]
+  },
+  {
+    "id": "visual_01",
+    "category": "visual_feedback",
+    "instruction": "Make this object glow when the player looks at it",
+    "status": "ok",
+    "code": "using UnityEngine;public class GazeGlow : MonoBehaviour{ private Material originalMaterial; private Color originalEmissionColor; private bool isGlowing; public Color glowColor = Color.yellow; public float glowIntensity = 1f; public float raycastDistance = 100f; void Start(){ MeshRenderer meshRenderer = GetComponent<MeshRenderer>(); if (meshRenderer != null){ originalMaterial = meshRenderer.material; originalEmissionColor = originalMaterial.HasProperty(\"_EmissionColor\") ? originalMaterial.GetColor(\"_EmissionColor\") : Color.black; } else{ Debug.LogError(\"GazeGlow requires a MeshRenderer component.\", this); enabled = false; } } void Update(){ RaycastHit hit; if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out hit, raycastDistance)){ if (hit.collider.gameObject == gameObject){ if (!isGlowing){ SetGlow(true); } } else{ if (isGlowing){ SetGlow(false); } } } else{ if (isGlowing){ SetGlow(false); } } } private void SetGlow(bool enable){ MeshRenderer meshRenderer = GetComponent<MeshRenderer>(); if (meshRenderer == null){ return; } Material currentMaterial = meshRenderer.material; if (enable){ currentMaterial.EnableKeyword(\"_EMISSION\"); currentMaterial.SetColor(\"_EmissionColor\", glowColor * glowIntensity); } else{ currentMaterial.SetColor(\"_EmissionColor\", originalEmissionColor); if (originalEmissionColor == Color.black){ currentMaterial.DisableKeyword(\"_EMISSION\"); } } isGlowing = enable; } private void OnDestroy(){ if (originalMaterial != null){ originalMaterial.SetColor(\"_EmissionColor\", originalEmissionColor); if (originalEmissionColor == Color.black){ originalMaterial.DisableKeyword(\"_EMISSION\"); } } }}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "\"this object\" refers to the GameObject `Cube_01`.",
+      "\"player\" refers to the `Player` GameObject which contains the main `Camera`.",
+      "\"looks at it\" implies a raycast from the player's camera forward vector.",
+      "\"glow\" means changing the `_EmissionColor` property of the object's material and enabling the `_EMISSION` keyword if needed.",
+      "The target object `Cube_01` has a `MeshRenderer` component to access its material.",
+      "The material on `Cube_01` supports `_EmissionColor` and the `_EMISSION` keyword (standard for Unity's default materials or URP/HDRP lit shaders).",
+      "The default glow color is yellow with an intensity of 1.",
+      "The raycast distance to detect the gaze is 100 units.",
+      "The script is attached directly to the `Cube_01` GameObject."
+    ]
+  },
+  {
+    "id": "visual_02",
+    "category": "visual_feedback",
+    "instruction": "Make this panel fade out after 3 seconds",
+    "status": "ok",
+    "code": "using UnityEngine;using UnityEngine.UI;using System.Collections;public class PanelFadeOut : MonoBehaviour{    public float fadeDelay = 3f;    public float fadeDuration = 1f;    private RawImage rawImage;    void Start()    {        rawImage = GetComponent<RawImage>();        if (rawImage == null)        {            Debug.LogError(\"RawImage component not found on \" + gameObject.name);            return;        }        StartCoroutine(FadeOutAfterDelay());    }    IEnumerator FadeOutAfterDelay()    {        yield return new WaitForSeconds(fadeDelay);        Color currentColor = rawImage.color;        float startAlpha = currentColor.a;        float timer = 0f;        while (timer < fadeDuration)        {            timer += Time.deltaTime;            float newAlpha = Mathf.Lerp(startAlpha, 0f, timer / fadeDuration);            rawImage.color = new Color(currentColor.r, currentColor.g, currentColor.b, newAlpha);            yield return null;        }        rawImage.color = new Color(currentColor.r, currentColor.g, currentColor.b, 0f);        gameObject.SetActive(false);    }}",
+    "target_object": "Panel_01",
+    "assumptions": [
+      "The script should be attached to 'Panel_01'.",
+      "The fade out duration is assumed to be 1 second, as no duration was specified.",
+      "The panel should become inactive after fading out completely."
+    ]
+  },
+  {
+    "id": "spatial_01",
+    "category": "spatial",
+    "instruction": "Make this door open when the player walks within 1 meter",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class DoorProximityOpener : MonoBehaviour\n{\n    public GameObject player; // Assign the Player GameObject in the Inspector\n    public float activationDistance = 1f; // The distance to activate the door\n    public float openAmount = 3f; // How much the door moves upwards when open\n    public float openSpeed = 1f; // Speed of opening/closing\n\n    private Vector3 initialPosition;\n    private Vector3 targetOpenPosition;\n\n    void Start()\n    {\n        initialPosition = transform.position;\n        targetOpenPosition = initialPosition + Vector3.up * openAmount; // Moves the door upwards\n        \n        // If player is not assigned, try to find it by name based on the scene description\n        if (player == null)\n        {\n            player = GameObject.Find(\"Player\");\n            if (player == null)\n            {\n                Debug.LogError(\"Player GameObject not found. Please assign it in the inspector or ensure it is named 'Player'.\");\n            }\n        }\n    }\n\n    void Update()\n    {\n        if (player == null) return;\n\n        float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);\n\n        if (distanceToPlayer < activationDistance)\n        {\n            // Move door towards the open position\n            transform.position = Vector3.MoveTowards(transform.position, targetOpenPosition, openSpeed * Time.deltaTime);\n        }\n        else\n        {\n            // Move door back towards the initial (closed) position\n            transform.position = Vector3.MoveTowards(transform.position, initialPosition, openSpeed * Time.deltaTime);\n        }\n    }\n}",
+    "target_object": "Door_01",
+    "assumptions": [
+      "The 'Door_01' opens by translating upwards along its local Y-axis.",
+      "The 'Player' GameObject is the entity whose transform position is used for distance calculation.",
+      "If the 'player' field is not manually assigned in the Inspector, the script will attempt to find a GameObject named 'Player' in the scene.",
+      "The door will move 3 units upwards from its initial position when fully open.",
+      "The door will open and close at a speed of 1 unit per second."
+    ]
+  },
+  {
+    "id": "spatial_02",
+    "category": "spatial",
+    "instruction": "Make this object follow the player's hand at a distance",
+    "status": "ok",
+    "code": "using UnityEngine;using UnityEngine.XR;using System.Collections.Generic;public class HandFollower : MonoBehaviour{public float followDistance = 0.5f;private InputDevice rightHandDevice;void Start(){InitializeRightHand();}{void Update(){if (!rightHandDevice.isValid){InitializeRightHand();}if (rightHandDevice.isValid){Vector3 handPosition;Quaternion handRotation;if (rightHandDevice.TryGetFeatureValue(CommonUsages.devicePosition, out handPosition) && rightHandDevice.TryGetFeatureValue(CommonUsages.deviceRotation, out handRotation)){transform.position = handPosition + handRotation * Vector3.forward * followDistance;transform.rotation = handRotation;}}}}{void InitializeRightHand(){List<InputDevice> devices = new List<InputDevice>();InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.Right | InputDeviceCharacteristics.Controller, devices);if (devices.Count > 0){rightHandDevice = devices[0];Debug.Log(\"Right hand device found: \" + rightHandDevice.name);}}}}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The script `HandFollower` will be attached to 'Cube_01'.",
+      "\"Player's hand\" refers to the player's right-hand XR controller.",
+      "The object should follow the hand's position and rotation, maintaining `followDistance` in front of the controller's forward direction.",
+      "The default `followDistance` is 0.5 units.",
+      "The XR controller input is available via `UnityEngine.XR.InputDevices` and `CommonUsages`.",
+      "The XR device is properly initialized and tracking its position and rotation."
+    ]
+  },
+  {
+    "id": "multiobject_01",
+    "category": "multi_object",
+    "instruction": "When this button is pressed, turn on that light",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class ButtonLightController : MonoBehaviour\n{\n    public Light targetLight;\n\n    private void OnTriggerEnter(Collider other)\n    {\n        // Assuming any collider entering the trigger counts as a button press\n        if (targetLight != null)\n        {\n            targetLight.enabled = true;\n            Debug.Log(\"Button pressed, light turned on.\");\n        }\n    }\n}\n",
+    "target_object": "Button_01",
+    "assumptions": [
+      "The 'Button_01' GameObject will have this 'ButtonLightController' script attached.",
+      "The 'Button_01' GameObject's BoxCollider will be set to 'Is Trigger' in the Inspector to detect a 'press' event via OnTriggerEnter.",
+      "The 'Light_01' GameObject will be dragged into the 'Target Light' field of the 'ButtonLightController' script in the Inspector.",
+      "A 'press' of the button is registered when any collider enters the trigger collider of 'Button_01'.",
+      "Turning on the light means setting the `enabled` property of its Light component to `true`."
+    ]
+  },
+  {
+    "id": "multiobject_02",
+    "category": "multi_object",
+    "instruction": "Make this object copy the rotation of that other object",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class RotateWithOther : MonoBehaviour\n{\n    public Transform targetTransform;\n\n    void Update()\n    {\n        if (targetTransform != null)\n        {\n            transform.rotation = targetTransform.rotation;\n        }\n    }\n}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The script will be attached to \"Cube_01\".",
+      "\"Cube_01\" is \"this object\" mentioned in the instruction.",
+      "\"Sphere_01\" is \"that other object\" mentioned in the instruction.",
+      "The rotation copying should happen continuously, so it is implemented in the `Update` method.",
+      "The user will manually assign the `Sphere_01`'s Transform to the `targetTransform` field in the Unity Editor after the script is added to `Cube_01`."
+    ]
+  },
+  {
+    "id": "ambiguous_01",
+    "category": "ambiguous",
+    "instruction": "Make the thing move when I grab it",
+    "status": "ok",
+    "code": "using UnityEngine;\nusing UnityEngine.XR.Interaction.Toolkit;\n\n[RequireComponent(typeof(Rigidbody))]\n[RequireComponent(typeof(XRGrabInteractable))]\npublic class CustomGrabMovement : MonoBehaviour\n{\n    private XRGrabInteractable _grabInteractable;\n    private IXRSelectInteractor _currentInteractor;\n    private bool _isGrabbed = false;\n\n    void Awake()\n    {\n        _grabInteractable = GetComponent<XRGrabInteractable>();\n        if (_grabInteractable == null)\n        {\n            Debug.LogError(\"XRGrabInteractable not found on this GameObject.\");\n            return;\n        }\n\n        // Disable default tracking so our script can control movement directly\n        _grabInteractable.trackPosition = false;\n        _grabInteractable.trackRotation = false;\n\n        _grabInteractable.firstSelectEntered.AddListener(OnGrab);\n        _grabInteractable.lastSelectExited.AddListener(OnRelease);\n    }\n\n    void OnDestroy()\n    {\n        if (_grabInteractable != null)\n        {\n            _grabInteractable.firstSelectEntered.RemoveListener(OnGrab);\n            _grabInteractable.lastSelectExited.RemoveListener(OnRelease);\n        }\n    }\n\n    private void OnGrab(SelectEnterEventArgs args)\n    {\n        _currentInteractor = args.interactorObject;\n        _isGrabbed = true;\n        \n        // Make the Rigidbody kinematic while grabbed for direct transform control\n        Rigidbody rb = GetComponent<Rigidbody>();\n        if (rb != null)\n        {\n            rb.isKinematic = true;\n        }\n    }\n\n    private void OnRelease(SelectExitEventArgs args)\n    {\n        _currentInteractor = null;\n        _isGrabbed = false;\n        \n        // Re-enable physics simulation upon release\n        Rigidbody rb = GetComponent<Rigidbody>();\n        if (rb != null)\n        {\n            rb.isKinematic = false;\n        }\n    }\n\n    void FixedUpdate()\n    {\n        if (_isGrabbed && _currentInteractor != null)\n        {\n            // Directly set position and rotation to follow the interactor\n            transform.position = _currentInteractor.transform.position;\n            transform.rotation = _currentInteractor.transform.rotation;\n        }\n    }\n}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The \"thing\" refers to \"Cube_01\" because it is the first object tagged \"grabbable\" in the scene.",
+      "\"Grab\" implies using Unity's XR Interaction Toolkit's `Select` interaction event.",
+      "\"Move when I grab it\" means the object should directly follow the grabbing controller's position and rotation while being held.",
+      "The target object \"Cube_01\" requires a `Rigidbody` and an `XRGrabInteractable` component for this script to function and detect grab events, which are added automatically by `RequireComponent`."
+    ]
+  },
+  {
+    "id": "ambiguous_02",
+    "category": "ambiguous",
+    "instruction": "Make it bigger when I look at it",
+    "status": "ok",
+    "code": "using UnityEngine;\n\npublic class GazeScale : MonoBehaviour\n{\n    private Vector3 originalScale;\n    public float scaleMultiplier = 1.2f;\n    private Camera mainCamera;\n\n    void Start()\n    {\n        originalScale = transform.localScale;\n        mainCamera = Camera.main;\n        if (mainCamera == null)\n        {\n            Debug.LogError(\"Main Camera not found. Please ensure your camera is tagged 'MainCamera'.\");\n            enabled = false; // Disable the script if no main camera\n        }\n    }\n\n    void Update()\n    {\n        if (mainCamera == null) return;\n\n        Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);\n        RaycastHit hit;\n\n        if (Physics.Raycast(ray, out hit))\n        {\n            if (hit.collider.gameObject == gameObject)\n            {\n                // Object is being looked at, make it bigger\n                transform.localScale = originalScale * scaleMultiplier;\n            }\n            else\n            {\n                // Another object is being looked at, or nothing is hit. Return to original scale.\n                transform.localScale = originalScale;\n            }\n        }\n        else\n        {\n            // Nothing is being looked at. Return to original scale.\n            transform.localScale = originalScale;\n        }\n    }\n}",
+    "target_object": "Cube_01",
+    "assumptions": [
+      "The instruction 'it' refers to the object named 'Cube_01'.",
+      "The player's gaze is determined by a raycast from the `Camera.main` object.",
+      "The camera component on the 'Player' GameObject is tagged 'MainCamera', allowing it to be accessed via `Camera.main`.",
+      "Making the object 'bigger' implies a uniform scale increase by a factor of 1.2 along all axes.",
+      "The object should return to its original size when the player's gaze is no longer on it."
+    ]
+  }
+]
