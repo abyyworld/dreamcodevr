@@ -1,26 +1,20 @@
 # DreamCodeVR - Generation Server
 
-Python backend for the DreamCodeVR error-recovery prototype. Generates Unity C# behavior scripts from natural-language instructions using OpenAI (gpt-4o), with structured JSON output. Supports both full generation and granular, assumption-scoped regeneration, plus offline analysis of how faithfully regenerations actually preserve the code tied to assumptions the user asked to keep.
+This is the Python backend for the DreamCodeVR prototype. It takes plain-English instructions and turns them into Unity C# scripts using GPT-4o, then lists out the assumptions it made while writing that code.
+
+## What it does
+
+You type something like "make this cube spin." This server asks GPT-4o to write a Unity script for that, tells you which object it picked, and gives you a list of assumptions it made along the way (like "assumed default speed of 100 degrees/sec"). Unity then shows those assumptions as checkboxes so you can keep the ones that are right and regenerate just the ones that are wrong.
 
 ## Files
 
-* `generation_service.py` - Core functions:
-  * `generate_behavior(scene_description, instruction)` - calls OpenAI with a strict JSON schema, returns `{code, target_object, assumptions[]}`.
-  * `regenerate_behavior(scene_description, instruction, previous_code, rejected_assumptions, kept_assumptions)` - correction pass. Given the previous code and which assumptions were rejected vs kept, asks the model to fix only the rejected parts and preserve the rest. Returns the same `{code, target_object, assumptions[]}` shape.
-* `generation_server.py` - Flask wrapper. Run this to serve Unity. Listens on `http://127.0.0.1:5005`, two endpoints:
-  * `POST /generate` - fresh generation from an instruction.
-  * `POST /regenerate` - correction pass, takes `previous_code`, `rejected_assumptions`, `kept_assumptions` in addition to `scene` and `instruction`.
-* `benchmark_runner.py` - Runs 12 fixed benchmark instructions offline, saves results to `results/benchmark_run_<timestamp>.json`.
-* `analyze_fidelity.py` - Offline analysis script. Reads the Unity-side study log CSV (`~/Desktop/dreamcodevr_study_log.csv`) and, for every regenerate trial, computes a real line-level diff (via Python's `difflib`) between the pre- and post-regenerate code, rather than relying on exact string match. Outputs `~/Desktop/dreamcodevr_fidelity_analysis.csv` with percent of lines changed/added/removed, a `kept_assumption_violation` flag, and a recomputed `belief_correct_real_diff` field that checks the user's stated trust ("will the AI keep what I marked as correct?") against what actually happened in the code. Run with `python analyze_fidelity.py` from `~/dreamcodevr` after collecting trial data. No extra dependencies beyond the standard library.
-* `results/` - Offline benchmark outputs.
-
-## The regenerate / partial-rejection flow
-
-On the Unity side, each generated assumption is shown with its own checkbox instead of one blanket accept/reject. The user can:
-- Accept everything as-is, or
-- Uncheck specific assumptions they believe are wrong and press "Regenerate Unchecked," which calls `/regenerate` with only the unchecked items as `rejected_assumptions` and the rest as `kept_assumptions`.
-
-Before each regenerate call, the user is asked a belief-elicitation question ("do you expect the assumptions you kept to still hold after this?", yes/no), logged alongside a randomized disclosure condition (whether the user was warned upfront that regeneration may affect unrelated parts of the code). This lets `analyze_fidelity.py` compare what the user predicted against what the model actually did to the code.
+- **generation_service.py** - the actual AI calls live here. Two functions:
+  - `generate_behavior(...)` - first-time generation from an instruction
+  - `regenerate_behavior(...)` - takes a previous script plus which assumptions were rejected/kept, and tries to fix only the rejected parts
+- **generation_server.py** - the Flask server Unity talks to. Two endpoints: `/generate` and `/regenerate`
+- **benchmark_runner.py** - runs through a fixed list of test instructions and saves the results
+- **analyze_fidelity.py** - a script you run after collecting data. It checks whether "regenerate" actually left the kept assumptions untouched, by diffing the code before and after
+- **results/** - where benchmark runs get saved
 
 ## Setup
 
@@ -32,7 +26,7 @@ pip install flask openai
 export OPENAI_API_KEY=your_key_here
 ```
 
-Important: never put `# comments` on the same line as `export` in zsh - it breaks the shell. Put the export on its own line, comment above it.
+Don't put a `# comment` on the same line as `export` in zsh, it breaks. Put the comment on its own line above.
 
 ## Running
 
@@ -41,11 +35,21 @@ cd ~/dreamcodevr
 python generation_server.py
 ```
 
-Must be run from `~/dreamcodevr` so it can import `generation_service`. Restart this process after any edit to `generation_service.py` - Flask does not auto-reload.
+Has to be run from `~/dreamcodevr` so it can find `generation_service.py`. If you edit `generation_service.py`, stop the server and restart it, Flask doesn't auto-reload.
 
-## Known issues / gotchas
+## Checking how well regenerate actually works
 
-* GPT-4o sometimes omits `using System.Collections;` for coroutine-based code (IEnumerator). System prompt now explicitly requires this, but not 100% guaranteed.
-* "this ball" / "that thing" style instructions may not map to the semantically obvious object (e.g. "this ball" -> Cube_01 instead of Sphere_01) if the LLM has no notion of what the user is currently looking at/holding. Explicit object names (e.g. "Sphere_01") work more reliably.
-* **Regeneration does not reliably honor `kept_assumptions`.** Even with an explicit, structured system prompt instructing the model to preserve code tied to kept assumptions and only change what's tied to rejected ones, GPT-4o frequently rewrites unrelated code anyway. In early pilot testing, regenerations changed code tied to "kept" assumptions in the majority of trials, with the percentage of changed lines ranging from under 10% to 50% in a single correction pass. This is currently treated as a documented limitation and a candidate research finding (the gap between perceived granular control and actual model behavior) rather than something patched away - see `analyze_fidelity.py` for the measurement approach.
-* Multiple consecutive regenerate calls on the same trial compound this drift further, since each regenerate uses the previous regenerate's output as its new "previous code." Treat multi-round regenerate chains as a separate analysis case from single-round ones if doing formal trial counting.
+After you've used the app for a bit and built up some data in `~/Desktop/dreamcodevr_study_log.csv`, run:
+
+```
+python analyze_fidelity.py
+```
+
+This compares the code before and after every "Regenerate Unchecked" click and tells you how much actually changed. No extra installs needed.
+
+## Things to know
+
+- GPT-4o sometimes forgets `using System.Collections;` when the code needs it (coroutines). The prompt tells it to always include this, but it doesn't always listen.
+- Saying "this ball" or "that thing" doesn't reliably point at the right object, it tends to default to Cube_01 even when a sphere exists. Naming the object directly (e.g. "Sphere_01") works much better.
+- **Big one: regenerate doesn't fully respect what you told it to keep.** Even though the prompt explicitly says "don't touch the kept assumptions," GPT-4o still rewrites code tied to them fairly often, sometimes changing half the lines in the script even when you only rejected one small thing. This isn't something I've been able to fully fix with prompting, and at this point it's more interesting as a finding than as a bug, see `analyze_fidelity.py` for how this gets measured.
+- If you hit Regenerate multiple times in a row on the same script, this drift adds up each time, since each regenerate uses the last regenerate's output as its starting point.
